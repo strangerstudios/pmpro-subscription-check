@@ -1,9 +1,9 @@
 <?php
 /*
-Plugin Name: Paid Memberships Pro - PayPal Subscription Check Add On
-Plugin URI: http://www.paidmembershipspro.com/wp/pmpro-customizations/
-Description: Checks whether PayPal subscriptions for PMPro members are still active.
-Version: .1
+Plugin Name: Paid Memberships Pro - Subscription Check Add On
+Plugin URI: http://www.paidmembershipspro.com/wp/pmpro-subscription-check/
+Description: Checks whether PayPal/Stripe/Authorize.net subscriptions for PMPro members are still active.
+Version: .2
 Author: Stranger Studios
 Author URI: http://www.strangerstudios.com
 */
@@ -12,7 +12,7 @@ Author URI: http://www.strangerstudios.com
  * Add settings page
  */
 function pmproppsc_admin_menu() {
-    add_submenu_page('pmpro-membershiplevels', __('PayPal Subscription Check', 'pmproppsc'), __('PayPal Subscription Check', 'pmproppsc'), 'manage_options', 'pmproppsc', 'pmproppsc_admin_page');
+    add_submenu_page('pmpro-membershiplevels', __('Subscription Check', 'pmproppsc'), __('Subscription Check', 'pmproppsc'), 'manage_options', 'pmproppsc', 'pmproppsc_admin_page');
 }
 add_action('admin_menu', 'pmproppsc_admin_menu', 15);
 
@@ -21,9 +21,9 @@ function pmproppsc_admin_page()
 {
 ?>
 <div class="wrap">
-<h2>PMPro PayPal Subscription Check</h2>
+<h2>PMPro Subscription Check</h2>
 <?php
-	if(!empty($_REQUEST['pmpro_paypal_subscription_check']) && (current_user_can("manage_options")))
+	if(!empty($_REQUEST['pmpro_subscription_check']) && (current_user_can("manage_options")))
 	{
 		global $wpdb;
 
@@ -39,23 +39,35 @@ function pmproppsc_admin_page()
 
 		//when using auto refresh get the last user id
 		if(!empty($_REQUEST['autorefresh']) && empty($_REQUEST['restart']))
-			$last_user_id = get_option("pmpro_paypal_subscription_check_last_user_id", 0);
+			$last_user_id = get_option("pmpro_subscription_check_last_user_id", 0);
 		else
 			$last_user_id = 0;
 
-		$sqlQuery = "SELECT DISTINCT(user_id) FROM $wpdb->pmpro_membership_orders ";
-		if(!empty($last_user_id))
-			$sqlQuery .= "WHERE user_id > '" . $last_user_id . "' ";
-		$sqlQuery .= "ORDER BY user_id LIMIT $start, $limit";
-		$user_ids = $wpdb->get_col($sqlQuery);
+		//get gateway
+		$gateway = $_REQUEST['gateway'];
+		if(!in_array($gateway, array_keys(pmpro_gateways())))
+			wp_die('Invalid gateway selection.');
+		
+		//when using auto refresh get the last user id
+		if(!empty($_REQUEST['autorefresh']) && empty($_REQUEST['restart']))
+			$last_user_id = get_option("pmpro_stripe_subscription_check_last_user_id", 0);
+		else
+			$last_user_id = 0;
 
+		$sqlQuery = "SELECT DISTINCT(user_id) FROM $wpdb->pmpro_membership_orders WHERE gateway = '" . esc_sql($gateway) . "' ";
+		if(!empty($last_user_id))
+			$sqlQuery .= "AND user_id > '" . $last_user_id . "' ";
+		$sqlQuery .= "ORDER BY user_id LIMIT $start, $limit";
+				
+		$user_ids = $wpdb->get_col($sqlQuery);
+		$totalrows = $wpdb->get_var("SELECT COUNT(DISTINCT(user_id)) FROM $wpdb->pmpro_membership_orders WHERE gateway = '" . esc_sql($gateway) . "'");
+		
 		if(empty($_REQUEST['autorefresh']))
 		{
-			echo "Checking users for orders " . $start . " to " . $limit . ". ";	
-
-			if($wpdb->num_rows > intval($start) + intval($limit))
+			echo "Checking users for orders " . $start . " to " . min(intval($start + $limit), $totalrows) . ". ";			
+			if($totalrows > intval($start+$limit))
 			{
-				$url = "?page=pmproppsc&pmpro_paypal_subscription_check=1&start=" . ($start+$limit) . "&limit=" . $limit;
+				$url = "?page=pmproppsc&pmpro_subscription_check=1&start=" . ($start+$limit) . "&limit=" . $limit . "&gateway=" . $gateway;
 				echo '<a href="' . $url . '">Next ' . $limit . ' Results</a>';
 			}
 			else
@@ -140,22 +152,31 @@ function pmproppsc_admin_page()
 							$requiresaction .=  "<span style='color: black;'><strong>" . $s . "</strong></span><br />\n";
 						}
 					}
-					elseif(!empty($user) && strtolower($details['STATUS']) != 'Active' && $level_id == $order->membership_id)
+					elseif(!empty($user) && strtolower($details['STATUS']) != 'active' && $level_id == $order->membership_id)
 					{
 						//if gateway status is not active, but local user has the level associated with this order, cancel the local membership
 						$s .= "Still has a #" . $level_id . " membership here. ";
-						
+
 						if(!empty($_REQUEST['mode']))
-						{
-							if(pmpro_changeMembershipLevel(0, $user->ID))
+						{							
+							//check if membership has an enddate
+							if(empty($level->enddate)) 
 							{
-								$s .= " Membership cancelled.";
-								echo "<span style='color: green;'><strong>" . $s . "</strong></span>";
-							}						
+								if(pmpro_changeMembershipLevel(0, $user->ID))
+								{
+									$s .= " Membership cancelled.";
+									echo "<span style='color: green;'><strong>" . $s . "</strong></span>";
+								}						
+								else
+								{
+									$s .= " Error cancelling membership.";
+									echo "<span style='color: red;'><strong>" . $s . "</strong></span>";
+								}
+							}
 							else
 							{
-								$s .= " Error cancelling membership.";
-								echo "<span style='color: red;'><strong>" . $s . "</strong></span>";
+								$s .= " Membership is set to end on " . date(get_option('date_format'), $level->enddate) . ". Looks good!";
+								echo "<span style='color: gray;'><strong>" . $s . "</strong></span>";
 							}
 						}
 						else
@@ -196,7 +217,7 @@ function pmproppsc_admin_page()
 		//update last user id if using auto refresh
 		if(!empty($_REQUEST['autorefresh']))
 		{
-			update_option("pmpro_paypal_subscription_check_last_user_id", $last_user_id);
+			update_option("pmpro_subscription_check_last_user_id", $last_user_id);
 
 			if(!empty($allmembers))
 			{
@@ -214,7 +235,7 @@ function pmproppsc_admin_page()
 				fclose($loghandle);
 			}
 			
-			if($wpdb->num_rows > intval($start)+intval($limit))
+			if($totalrows > intval($start)+intval($limit))
 			{
 				echo "Continuing in 2 seconds...";
 				?>
@@ -228,20 +249,25 @@ function pmproppsc_admin_page()
 
 		}
 
-		echo '<hr /><a href="?page=pmproppsc">&laquo; return to PayPal Subscription Check home</a>';
+		echo '<hr /><a href="?page=pmproppsc">&laquo; return to Subscription Check home</a>';
 	}
 	else
 	{
 	?>
 	<form method = "get">
-		<p><strong>WARNING: Running this code could cancel subscriptions on the WP side or at PayPal. Use at your own risk.</strong></p>
-		<p>Test mode will check the status of subscriptions, but won't cancel any memberships locally or cancel any subscription at PayPal. Live Mode will check the status of subscriptions and also cancel any membership locally if the PayPal subscription was perviously cancelled and will cancel any PayPal subscription for members that cancelled their membership in PMPro.</p>
+		<p><strong>WARNING: Running this code could cancel subscriptions on the WP side or at your gateway. Use at your own risk.</strong></p>
+		<p>Test mode will check the status of subscriptions, but won't cancel any memberships locally or cancel any subscription at the gateway. Live Mode will check the status of subscriptions and also cancel any membership locally if the gateway subscription was perviously cancelled and will cancel any gateway subscription for members that cancelled their membership in PMPro.</p>
 		<input type="hidden" name="page" value ="pmproppsc" />
-		<input type="hidden" name="pmpro_paypal_subscription_check" value="1">
+		<input type="hidden" name="pmpro_subscription_check" value="1">
 		<input type="hidden" name="restart" value="1" />
 		<select name="mode">
 			<option value="0">Test Only</option>
 			<option value="1">Live Mode</option>
+		</select>
+		<select name="gateway">
+			<option value="paypal">PayPal (Standard, Express, WPP Legacy)</option>
+			<option value="stripe">Stripe</option>
+			<option value="authorizenet">Authorize.net</option>
 		</select>
 		<select name="autorefresh">
 			<option value="0">Manual Refresh</option>
