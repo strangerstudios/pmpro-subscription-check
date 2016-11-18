@@ -9,19 +9,22 @@ Author URI: http://www.strangerstudios.com
 */
 
 /*
- * Add settings page
- */
+Add the Subscription Check admin page
+*/
 function pmproppsc_admin_menu() {
     add_submenu_page('pmpro-membershiplevels', __('Subscription Check', 'pmproppsc'), __('Subscription Check', 'pmproppsc'), 'manage_options', 'pmproppsc', 'pmproppsc_admin_page');
 }
 add_action('admin_menu', 'pmproppsc_admin_menu', 15);
 
-//the page
+/*
+Content of the Subscription Check admin page
+*/
 function pmproppsc_admin_page()
 {
+	require_once(PMPRO_DIR . "/adminpages/admin_header.php");
 ?>
 <div class="wrap">
-<h2>PMPro Subscription Check</h2>
+<h2>Subscription Check</h2>
 <?php
 	if(!empty($_REQUEST['pmpro_subscription_check']) && (current_user_can("manage_options")))
 	{
@@ -47,13 +50,7 @@ function pmproppsc_admin_page()
 		$gateway = $_REQUEST['gateway'];
 		if(!in_array($gateway, array_keys(pmpro_gateways())))
 			wp_die('Invalid gateway selection.');
-		
-		//when using auto refresh get the last user id
-		if(!empty($_REQUEST['autorefresh']) && empty($_REQUEST['restart']))
-			$last_user_id = get_option("pmpro_stripe_subscription_check_last_user_id", 0);
-		else
-			$last_user_id = 0;
-
+				
 		$sqlQuery = "SELECT DISTINCT(user_id) FROM $wpdb->pmpro_membership_orders WHERE gateway = '" . esc_sql($gateway) . "' ";
 		if(!empty($last_user_id))
 			$sqlQuery .= "AND user_id > '" . $last_user_id . "' ";
@@ -64,16 +61,18 @@ function pmproppsc_admin_page()
 		
 		if(empty($_REQUEST['autorefresh']))
 		{
+			echo "<p>";
 			echo "Checking users for orders " . $start . " to " . min(intval($start + $limit), $totalrows) . ". ";			
 			if($totalrows > intval($start+$limit))
 			{
 				$url = "?page=pmproppsc&pmpro_subscription_check=1&start=" . ($start+$limit) . "&limit=" . $limit . "&gateway=" . $gateway;
-				echo '<a href="' . $url . '">Next ' . $limit . ' Results</a>';
+				echo '<a class="button button-primary" href="' . $url . '">Next ' . $limit . ' Results</a>';
 			}
 			else
 				echo "All done.";
+			echo "</p>";
 
-			echo "<hr />";
+			echo "<hr /><p>";
 		}
 
 		$allmembers = "";
@@ -86,17 +85,17 @@ function pmproppsc_admin_page()
 			if(empty($user))
 				$s = "User #" . $user_id . " has been deleted. ";
 			else			
-				$s = "User #" . $user->ID . "(" . $user->user_email . ", " . $user->first_name . " " . $user->lat_name . ") ";
+				$s = "User <a href='" . get_edit_user_link($user->ID) . "'>#" . $user->ID . "</a> (" . $user->user_email . ")";
 			
 			$level = pmpro_getMembershipLevelForUser($user_id);
 			if(!empty($level) && empty($user))
 			{
-				$s .= " Had level #" . $level->id . ". ";
+				$s .= " Had Membership Level: " . $level->name . " (ID: " . $level->id . "). ";
 				$level_id = $level->id;
 			}
 			elseif(!empty($level))
 			{
-				$s .= " Has level #" . $level->id . ". ";
+				$s .= " has Membership Level: " . $level->name . " (ID: " . $level->id . "). ";
 				$level_id = $level->id;
 			}
 			else
@@ -110,8 +109,10 @@ function pmproppsc_admin_page()
 			
 			if(!empty($order->id))
 			{
-				$s .= " Last order was #" . $order->id . ", status " . $order->status . ". ";
-				
+				$s .= " Last order was <a href='admin.php?page=pmpro-orders&order=" . $order->id . "'>#" . $order->id . "</a>.";
+				if(!empty($order->status))
+					$s .= " Order status: " . $order->status . ". ";
+							
 				//check status of order at gateway
 				$details = $order->getGatewaySubscriptionStatus($order);
 
@@ -194,7 +195,10 @@ function pmproppsc_admin_page()
 					}
 					else
 					{
-						$s .= "Order is for level #" . $order->membership_id . ". User has level #" . $level_id . ". Looks good! ";
+						$s .= "Order is for level #" . $order->membership_id . ". ";
+						if(!empty($level_id))
+							$s .= "User has level #" . $level_id . ". ";
+						$s .= "Looks good! ";
 						echo "<span style='color: gray;'><strong>" . $s . "</strong></span>";	
 						$allmembers .=  "<span style='color: gray;'><strong>" . $s . "</strong></span>";						
 					}
@@ -208,8 +212,8 @@ function pmproppsc_admin_page()
 				$allmembers .=  "<span style='color: gray;'><strong>" . $s . "</strong></span>";			
 			}
 			
-			echo "<br />\n";
-			$allmembers .=  "<br />\n";
+			echo "</p><p>";
+			$allmembers .=  "</p>\n";
 			
 			$last_user_id = $user_id;
 		}
@@ -249,14 +253,16 @@ function pmproppsc_admin_page()
 
 		}
 
-		echo '<hr /><a href="?page=pmproppsc">&laquo; return to Subscription Check home</a>';
+		echo '<hr /><a class="button button-primary" href="?page=pmproppsc">Start Over</a>';
 	}
 	else
 	{
 	?>
 	<form method = "get">
-		<p><strong>WARNING: Running this code could cancel subscriptions on the WP side or at your gateway. Use at your own risk.</strong></p>
-		<p>Test mode will check the status of subscriptions, but won't cancel any memberships locally or cancel any subscription at the gateway. Live Mode will check the status of subscriptions and also cancel any membership locally if the gateway subscription was perviously cancelled and will cancel any gateway subscription for members that cancelled their membership in PMPro.</p>
+		<div class="error"><p><strong><?php _e('IMPORTANT NOTE', 'pmproppsc'); ?>:</strong> <?php _e('Running this code could cancel subscriptions in your WordPress site or at your gateway. Use at your own risk.', 'pmproppsc'); ?></p></div>
+		<p><?php _e('Test Mode will check the status of subscriptions, but will not cancel any memberships/subscriptions in your WordPress site or at the gateway.', 'pmproppsc'); ?></p>
+		<p><?php _e('Live Mode will (1) check the status of subscriptions, (2) cancel membership in your WordPress site if the gateway subscription was previously cancelled, and (3) cancel the gateway subscription for members that cancelled their membership in your WordPress site.', 'pmproppsc'); ?></p>
+		<hr />
 		<input type="hidden" name="page" value ="pmproppsc" />
 		<input type="hidden" name="pmpro_subscription_check" value="1">
 		<input type="hidden" name="restart" value="1" />
@@ -265,7 +271,9 @@ function pmproppsc_admin_page()
 			<option value="1">Live Mode</option>
 		</select>
 		<select name="gateway">
-			<option value="paypal">PayPal (Standard, Express, WPP Legacy)</option>
+			<option value="paypalexpress">PayPal Express</option>
+			<option value="paypalstandard">PayPal Standard</option>
+			<option value="paypal">PayPal (WPP Legacy)</option>
 			<option value="stripe">Stripe</option>
 			<option value="authorizenet">Authorize.net</option>
 		</select>
@@ -282,7 +290,7 @@ function pmproppsc_admin_page()
 			<option value="50">50 at a time</option>
 			<option value="100">100 at a time</option>
 		</select>
-		<input type="submit" value="Start Script" />
+		<input class="button button-primary" type="submit" value="Start Script" />
 	</form>
 	<?php
 	}
@@ -290,3 +298,31 @@ function pmproppsc_admin_page()
 </div>
 <?php
 }
+
+/*
+Function to add links to the plugin action links
+*/
+function pmproppsc_add_action_links($links) {
+	
+	$new_links = array(
+			'<a href="' . get_admin_url(NULL, 'admin.php?page=pmproppsc') . '">Check Subscriptions</a>',
+	);
+	return array_merge($new_links, $links);
+}
+add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'pmproppsc_add_action_links');
+
+/*
+Function to add links to the plugin row meta
+*/
+function pmproppsc_plugin_row_meta($links, $file) {
+	if(strpos($file, 'pmpro-subscription-check.php') !== false)
+	{
+		$new_links = array(
+			'<a href="' . esc_url('http://www.paidmembershipspro.com/add-ons/plus-add-ons/subscription-check/')  . '" title="' . esc_attr( __( 'View Documentation', 'pmpro' ) ) . '">' . __( 'Docs', 'pmpro' ) . '</a>',
+			'<a href="' . esc_url('http://paidmembershipspro.com/support/') . '" title="' . esc_attr( __( 'Visit Customer Support Forum', 'pmpro' ) ) . '">' . __( 'Support', 'pmpro' ) . '</a>',
+		);
+		$links = array_merge($links, $new_links);
+	}
+	return $links;
+}
+add_filter('plugin_row_meta', 'pmproppsc_plugin_row_meta', 10, 2);
