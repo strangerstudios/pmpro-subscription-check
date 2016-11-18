@@ -41,11 +41,11 @@ function pmproppsc_admin_page()
 			$start = 0;
 
 		//when using auto refresh get the last user id
-		if(!empty($_REQUEST['autorefresh']) && empty($_REQUEST['restart']))
+		if(!empty($_REQUEST['autorefresh']))
 			$last_user_id = get_option("pmpro_subscription_check_last_user_id", 0);
 		else
-			$last_user_id = 0;
-
+			$last_user_id = 0;		
+		
 		//get gateway
 		$gateway = $_REQUEST['gateway'];
 		if(!in_array($gateway, array_keys(pmpro_gateways())))
@@ -264,8 +264,7 @@ function pmproppsc_admin_page()
 		<p><?php _e('Live Mode will (1) check the status of subscriptions, (2) cancel membership in your WordPress site if the gateway subscription was previously cancelled, and (3) cancel the gateway subscription for members that cancelled their membership in your WordPress site.', 'pmproppsc'); ?></p>
 		<hr />
 		<input type="hidden" name="page" value ="pmproppsc" />
-		<input type="hidden" name="pmpro_subscription_check" value="1">
-		<input type="hidden" name="restart" value="1" />
+		<input type="hidden" name="pmpro_subscription_check" value="1">		
 		<select name="mode">
 			<option value="0">Test Only</option>
 			<option value="1">Live Mode</option>
