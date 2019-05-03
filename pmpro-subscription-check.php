@@ -12,7 +12,15 @@ Author URI: http://www.strangerstudios.com
  * Add settings page
  */
 function pmproppsc_admin_menu() {
-    add_submenu_page('pmpro-membershiplevels', __('Subscription Check', 'pmproppsc'), __('Subscription Check', 'pmproppsc'), 'manage_options', 'pmproppsc', 'pmproppsc_admin_page');
+		if ( ! defined( 'PMPRO_VERSION' ) ) {
+			return;
+		}
+		if( version_compare( PMPRO_VERSION, '2.0' ) >= 0 ) {
+			$parent_page = 'pmpro-dashboard';
+		} else {
+			$parent_page = 'pmpro-membershiplevels';
+		}
+    add_submenu_page( $parent_page, __('Subscription Check', 'pmproppsc'), __('Subscription Check', 'pmproppsc'), 'manage_options', 'pmproppsc', 'pmproppsc_admin_page');
 }
 add_action('admin_menu', 'pmproppsc_admin_menu', 15);
 
