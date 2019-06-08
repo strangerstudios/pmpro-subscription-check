@@ -273,9 +273,16 @@ function pmproppsc_admin_page()
 			<option value="1">Live Mode</option>
 		</select>
 		<select name="gateway">
-			<option value="paypal">PayPal (Standard, Express, WPP Legacy)</option>
+			<!-- I added these gateways in the following order rather than have only one option for all PayPal's flavours -->
 			<option value="stripe">Stripe</option>
+			<option value="paypalexpress">PayPal Express</option>
+			<option value="paypal">PayPal Website Payments Pro</option>
+			<option value="payflowpro">PayPal Payflow Pro/PayPal Pro</option>
+			<option value="paypalstandard">PayPal Standard</option>
 			<option value="authorizenet">Authorize.net</option>
+			<option value="braintree">Braintree Payments</option>
+			<option value="twocheckout">2Checkout</option>
+			<option value="cybersource">Cybersource</option>
 		</select>
 		<select name="autorefresh">
 			<option value="0">Manual Refresh</option>
