@@ -140,7 +140,7 @@ function pmproppsc_admin_page()
 					//if gateway status is active, but local user has no level, cancel the gateway subscription
 					if(strtolower($details['STATUS']) == 'active' && $level_id != $order->membership_id)
 					{
-						$s .= " But this user has level #" . $user_level_id . " and order is for #" . $order->membership_id . ". Will try to cancel at the gateway. ";
+						$s .= " But this user has level #" . $level_id . " and order is for #" . $order->membership_id . ". Will try to cancel at the gateway. ";
 						if(!empty($_REQUEST['mode']))
 						{
 							if($order->cancel())
