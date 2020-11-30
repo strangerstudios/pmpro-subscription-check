@@ -20,9 +20,20 @@ function pmproppsc_admin_menu() {
 		} else {
 			$parent_page = 'pmpro-membershiplevels';
 		}
-    add_submenu_page( $parent_page, __('Subscription Check', 'pmproppsc'), __('Subscription Check', 'pmproppsc'), 'manage_options', 'pmproppsc', 'pmproppsc_admin_page');
+    add_submenu_page( $parent_page, __('Subscription Check', 'pmproppsc'), __('Subscription Check', 'pmproppsc'), 'pmpro_subscription_check', 'pmproppsc', 'pmproppsc_admin_page');
 }
 add_action('admin_menu', 'pmproppsc_admin_menu', 15);
+
+/*
+Assign pmpro_subscription_check capability to administrator
+*/
+function pmproppsc_pmpro_subscription_check_cap() {
+
+  $role = get_role( 'administrator' );
+  $role->add_cap( 'pmpro_subscription_check' );
+
+}
+add_action( 'admin_init', 'pmproppsc_pmpro_subscription_check_cap' );
 
 /*
 Content of the Subscription Check admin page
