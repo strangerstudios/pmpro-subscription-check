@@ -117,7 +117,7 @@ function pmproppsc_admin_page()
 			
 			if(!empty($order->id))
 			{
-				$s .= " Last order was <a href='admin.php?page=pmpro-orders&order=" . $order->id . "'>#" . $order->id . "</a>.";
+				$s .= "<br />- Last order was <a href='admin.php?page=pmpro-orders&order=" . $order->id . "'>#" . $order->id . "</a>.";
 				if(!empty($order->status))
 					$s .= " Order status: " . $order->status . ". ";
 							
@@ -126,7 +126,7 @@ function pmproppsc_admin_page()
 
 				if(empty($details))
 				{
-					$s .= " Couldn't get status from gateway. ";
+					$s .= "<br />- Couldn't get status from gateway. ";
 					echo "<span style='color: gray;'>" . $s . "</span>";
 					$allmembers .= "<span style='color: gray;'>" . $s . "</span>";
 				}
@@ -135,7 +135,7 @@ function pmproppsc_admin_page()
 					if(!is_array($details))
 						$details = array('STATUS'=>$details);
 
-					$s .= "Gateway Status is " . $details['STATUS'] . ". ";
+					$s .= "<br />- Gateway Status is " . $details['STATUS'] . ". ";
 					
 					//if gateway status is active, but local user has no level, cancel the gateway subscription
 					if(strtolower($details['STATUS']) == 'active' && $level_id != $order->membership_id)
