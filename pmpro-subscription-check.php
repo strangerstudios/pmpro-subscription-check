@@ -8,6 +8,8 @@ Author: Paid Memberships Pro
 Author URI: https://www.paidmembershipspro.com/
 */
 
+use Stripe\Invoice as Stripe_Invoice;
+
 /*
 Add the Subscription Check admin page
 */
@@ -113,15 +115,149 @@ function pmproppsc_admin_page()
 			}
 			
 			$order = new MemberOrder();
-			$order->getLastMemberOrder($user_id, "");						
+			$order->getLastMemberOrder($user_id, "");
 			
-			if(!empty($order->id))
-			{
+			if( ! empty( $order ) && ! empty( $order->id ) ) {
 				$s .= "<br />- Last order was <a href='admin.php?page=pmpro-orders&order=" . $order->id . "'>#" . $order->id . "</a>.";
-				if(!empty($order->status))
+				if(!empty($order->status)) {
 					$s .= " Order status: " . $order->status . ". ";
-							
-				//check status of order at gateway
+				}
+
+				// Check for missing recurring orders.
+				if ( ! empty( $order->subscription_transaction_id ) ) {
+					// Get the first order too.
+					$first_order = $order->get_original_subscription_order();
+					if ( ! empty( $first_order ) ) {
+						$s .= "<br />- First order in this subscription was <a href='admin.php?page=pmpro-orders&order=" . $first_order->id . "'>#" . $first_order->id . "</a>.";
+					}
+					
+					// Get the # of orders for this subscription.
+					$sub_orders = $wpdb->get_col( "SELECT payment_transaction_id FROM $wpdb->pmpro_membership_orders WHERE subscription_transaction_id = '" . esc_sql( $first_order->subscription_transaction_id ) . "'" );
+					$num_orders = count( $sub_orders );
+					if ( $num_orders == 1 ) {
+						$s .= "<br />- There is 1 order in the local DB for this subscription.";
+					} else {
+						$s .= "<br />- There are " . esc_html( $num_orders ) . " orders in the local DB for this subscription.";
+					}
+					
+					// Guess how many orders you would expect.
+					$now = current_time( 'timestamp' );
+					$days = floor( ( $now - $first_order->timestamp ) / 86400 );
+					
+					if ( $level->cycle_period == 'Day' ) {
+						$pnum_orders = 1 + $days;
+					} elseif ( $level->cycle_period == 'Week' ) {
+						$pnum_orders = 1 + floor( $days / 7 );
+					} elseif ( $level->cycle_period == 'Month' ) {
+						$pnum_orders = 1 + floor( $days / 30 );
+					} elseif ( $level->cycle_period == 'Year' ) {
+						$pnum_orders = 1 + floor( $days / 365 );
+					}
+					
+					// If orders are missing, try to sync them from the gateway.
+					if ( $pnum_orders == $num_orders ) {
+						$s .= " Just like we'd expect. Good.";
+					} else {
+						$s .= " <span style='color: red;'><strong>But we're expecting " . esc_html( $pnum_orders ) . "</span>.";
+
+						if ( $first_order->gateway == 'stripe' ) {
+							$stripe = new PMProGateway_stripe();
+							$stripe->getCustomer( $first_order );							
+							$invoices = Stripe_Invoice::all(['customer' => $stripe->customer->id]);					
+							foreach( $invoices as $invoice ) {								
+								// not this sub
+								if ( $invoice->subscription != $first_order->subscription_transaction_id ) {
+									continue;
+								}
+								
+								// no charge
+								if ( empty( $invoice->charge ) ) {
+									continue;
+								}
+								
+								// already local
+								if ( in_array( $invoice->charge, $sub_orders ) || in_array( $invoice->id, $sub_orders ) ) {
+									continue;
+								}
+								
+								// new orders!
+								$s .= "<br />- We don't have this order (" . esc_html( $invoice->charge ) . ") yet.";
+								
+								// create the order if not testing
+								if( ! empty( $_REQUEST['mode'] ) ) {
+									//alright. create a new order/invoice
+									$morder = new MemberOrder();
+									$morder->user_id = $first_order->user_id;
+									$morder->membership_id = $first_order->membership_id;
+									$morder->timestamp = $invoice->created;
+									
+									global $pmpro_currency;
+									global $pmpro_currencies;
+									
+									$currency_unit_multiplier = 100; // 100 cents / USD
+
+									//account for zero-decimal currencies like the Japanese Yen
+									if(is_array($pmpro_currencies[$pmpro_currency]) && isset($pmpro_currencies[$pmpro_currency]['decimals']) && $pmpro_currencies[$pmpro_currency]['decimals'] == 0)
+										$currency_unit_multiplier = 1;
+									
+									if(isset($invoice->amount))
+									{
+										$morder->subtotal = $invoice->amount / $currency_unit_multiplier;
+										$morder->tax = 0;
+									}
+									elseif(isset($invoice->subtotal))
+									{
+										$morder->subtotal = (! empty( $invoice->subtotal ) ? $invoice->subtotal / $currency_unit_multiplier : 0);
+										$morder->tax = (! empty($invoice->tax) ? $invoice->tax / $currency_unit_multiplier : 0);
+										$morder->total = (! empty($invoice->total) ? $invoice->total / $currency_unit_multiplier : 0);
+									}
+
+									$morder->payment_transaction_id = $invoice->id;
+									$morder->subscription_transaction_id = $invoice->subscription;
+
+									$morder->gateway = $first_order->gateway;
+									$morder->gateway_environment = $first_order->gateway_environment;
+
+									$morder->FirstName = $first_order->FirstName;
+									$morder->LastName = $first_order->LastName;
+									$morder->Email = $wpdb->get_var("SELECT user_email FROM $wpdb->users WHERE ID = '" . $old_order->user_id . "' LIMIT 1");
+									$morder->Address1 = $first_order->Address1;
+									$morder->City = $first_order->billing->city;
+									$morder->State = $first_order->billing->state;
+									//$morder->CountryCode = $old_order->billing->city;
+									$morder->Zip = $first_order->billing->zip;
+									$morder->PhoneNumber = $first_order->billing->phone;
+
+									$morder->billing = new stdClass();
+									
+									$morder->billing->name = $morder->FirstName . " " . $morder->LastName;
+									$morder->billing->street = $first_order->billing->street;
+									$morder->billing->city = $first_order->billing->city;
+									$morder->billing->state = $first_order->billing->state;
+									$morder->billing->zip = $first_order->billing->zip;
+									$morder->billing->country = $first_order->billing->country;
+									$morder->billing->phone = $first_order->billing->phone;
+
+									//get CC info that is on file
+									$morder->cardtype = get_user_meta($first_order->user_id, "pmpro_CardType", true);
+									$morder->accountnumber = hideCardNumber(get_user_meta($first_order->user_id, "pmpro_AccountNumber", true), false);
+									$morder->expirationmonth = get_user_meta($first_order->user_id, "pmpro_ExpirationMonth", true);
+									$morder->expirationyear = get_user_meta($first_order->user_id, "pmpro_ExpirationYear", true);
+									$morder->ExpirationDate = $morder->expirationmonth . $morder->expirationyear;
+									$morder->ExpirationDate_YdashM = $morder->expirationyear . "-" . $morder->expirationmonth;
+
+									//save
+									$morder->status = "success";
+									$morder->saveOrder();
+									
+									$s .= " <span style='color: green;'>Created new order with ID <a href='admin.php?page=pmpro-orders&order=" . $morder->id . "'>#" . $morder->id . "</a></span>";
+								}
+							}
+						}
+					}
+				}
+					
+				// Check status of order at gateway.
 				$details = $order->getGatewaySubscriptionStatus($order);
 
 				if(empty($details))
