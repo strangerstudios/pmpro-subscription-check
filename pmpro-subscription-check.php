@@ -141,8 +141,13 @@ function pmproppsc_admin_page()
 					}
 					
 					// Guess how many orders you would expect.
-					$now = current_time( 'timestamp' );
-					$days = floor( ( $now - $first_order->timestamp ) / 86400 );
+					if ( $last_order->status == 'success' ) {
+						$latest = current_time( 'timestamp' );
+					} else {
+						$latest = $order->timestamp;
+					}
+					
+					$days = floor( ( $latest - $first_order->timestamp ) / 86400 );
 					
 					if ( $level->cycle_period == 'Day' ) {
 						$pnum_orders = 1 + $days;
@@ -152,6 +157,8 @@ function pmproppsc_admin_page()
 						$pnum_orders = 1 + floor( $days / 30 );
 					} elseif ( $level->cycle_period == 'Year' ) {
 						$pnum_orders = 1 + floor( $days / 365 );
+					} else {
+						$pnum_orders = 1;
 					}
 					
 					// If orders are missing, try to sync them from the gateway.
