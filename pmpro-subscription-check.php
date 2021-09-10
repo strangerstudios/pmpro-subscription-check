@@ -141,7 +141,7 @@ function pmproppsc_admin_page()
 					}
 					
 					// Guess how many orders you would expect.
-					if ( $last_order->status == 'success' ) {
+					if ( $order->status == 'success' ) {
 						$latest = current_time( 'timestamp' );
 					} else {
 						$latest = $order->timestamp;
@@ -149,13 +149,14 @@ function pmproppsc_admin_page()
 					
 					$days = floor( ( $latest - $first_order->timestamp ) / 86400 );
 					
-					if ( $level->cycle_period == 'Day' ) {
+					$order->getMembershipLevel();
+					if ( $order->membership_level->cycle_period == 'Day' ) {
 						$pnum_orders = 1 + $days;
-					} elseif ( $level->cycle_period == 'Week' ) {
+					} elseif ( $order->membership_level->cycle_period == 'Week' ) {
 						$pnum_orders = 1 + floor( $days / 7 );
-					} elseif ( $level->cycle_period == 'Month' ) {
+					} elseif ( $order->membership_level->cycle_period == 'Month' ) {
 						$pnum_orders = 1 + floor( $days / 30 );
-					} elseif ( $level->cycle_period == 'Year' ) {
+					} elseif ( $order->membership_level->cycle_period == 'Year' ) {
 						$pnum_orders = 1 + floor( $days / 365 );
 					} else {
 						$pnum_orders = 1;
