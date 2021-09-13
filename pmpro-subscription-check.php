@@ -10,6 +10,8 @@ Author URI: https://www.paidmembershipspro.com/
 
 use Stripe\Invoice as Stripe_Invoice;
 
+include_once( 'includes/repair-subscriptions.php' );
+
 /*
 Add the Subscription Check admin page
 */
