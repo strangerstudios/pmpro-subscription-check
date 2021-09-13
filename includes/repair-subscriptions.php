@@ -8,7 +8,7 @@ function pmprosc_testing() {
         return;
     }
         
-    pmprosc_uncancel_stripe_subscription(1, true);
+    pmprosc_uncancel_stripe_subscription(1, true, true);
     exit;
 }
 add_action( 'init', 'pmprosc_testing' );
@@ -73,7 +73,7 @@ function pmprosc_get_stripe_customer_id( $user_id ) {
  * @param   int         user_id The user_id of the user uncancel.
  * @return  string|bool sub_id  The sub_id of the sub created, or false if no sub was created.
  */
-function pmprosc_uncancel_stripe_subscription( $user_id, $debug = false ) {
+function pmprosc_uncancel_stripe_subscription( $user_id, $test = false, $debug = false ) {
     $gateway = new PMProGateway_stripe();
     $stripe = new Stripe\StripeClient(
       PMProGateway_stripe::get_secretkey()
@@ -106,7 +106,7 @@ function pmprosc_uncancel_stripe_subscription( $user_id, $debug = false ) {
             if ( $debug ) {
                 echo "This user has other active subscriptions.\n";
             }
-            ///return false;
+            return false;
         }
     } catch (\Throwable $th) {
         echo $th->getMessage();
@@ -161,10 +161,6 @@ function pmprosc_uncancel_stripe_subscription( $user_id, $debug = false ) {
         return false;
     }
     
-    if ( $debug ) {
-        echo "Creating the new subscription and subscribing.\n";
-    }
-    
     // Update our order with some properties the subscribe method expects.    
     $sub_item = $old_sub->items->data[0];
     $last_order->getUser();
@@ -181,7 +177,14 @@ function pmprosc_uncancel_stripe_subscription( $user_id, $debug = false ) {
     add_filter('pmpro_profile_start_date', function($startdate, $order) use ($last_order) { return $last_order->ProfileStartDate;   }, 10, 2);
     
     // Okay. Subscribe.
-    $gateway->subscribe( $last_order );
+    if ( ! $test ) {
+        if ( $debug ) {
+            echo "Creating the new subscription and subscribing.\n";
+        }
+        $gateway->subscribe( $last_order );
+    } elseif ( $debug ) {
+        echo "TESTING. This is where we would have created the new subscription and subscribed the customer.\n";
+    }    
     
     // Was there an error?
     if ( ! empty( $last_order->error ) ) {
@@ -191,12 +194,15 @@ function pmprosc_uncancel_stripe_subscription( $user_id, $debug = false ) {
         return false;
     }
     
-    if ( $debug ) {
-        echo "Updating the old order to use the new subscription id.\n";
-    }
-    
     // Saving the order updates the status and subscription_transaction_id.    
-    $last_order->saveOrder();
-    
+    if ( ! $test ) {
+        $last_order->saveOrder();
+        if ( $debug ) {
+            echo "Updating the old order to use the new subscription id.\n";
+        }
+    } elseif ( $debug ) {
+        echo "TESTING. This is where we would have updated the old order to use the new subscription id.\n";
+    }
+
     return $last_order->subscription_transaction_id;
 }
