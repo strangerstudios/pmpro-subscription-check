@@ -10,11 +10,24 @@ function pmprosc_testing() {
     
     pmprosc_uncancel_users();
         
-    //pmprosc_uncancel_stripe_subscription(1, true, true);
+    //pmprosc_uncancel_stripe_subscription(1, false, true);
     exit;
 }
 add_action( 'init', 'pmprosc_testing' );
 */
+
+/**
+ * Filter to make sure our updated start date is used.
+ * $order->RealProfileStartDate is set in the
+ * pmprosc_uncancel_stripe_subscription() function.
+ */
+function pmprosc_real_profile_start_date( $startdate, $order ) {        
+     if ( ! empty( $order->RealProfileStartDate ) ) {
+         $startdate = $order->RealProfileStartDate;
+     }
+     return $startdate;
+ }
+ add_filter( 'pmpro_profile_start_date', 'pmprosc_real_profile_start_date', 99, 2 );
 
 /**
  * Find users flagged in user meta to uncancel.
@@ -246,10 +259,8 @@ function pmprosc_uncancel_stripe_subscription( $user_id, $test = false, $debug =
     $last_order->PaymentAmount = $sub_item->plan->amount/100;
     $last_order->BillingPeriod = $sub_item->plan->interval;
     $last_order->BillingFrequency = $sub_item->plan->interval_count;
-    $last_order->ProfileStartDate = date( 'Y-m-d', $start_date ) . 'T0:0:0';    
-            
-    // We need to use the filter because the subscribe method overwrites this.    
-    add_filter('pmpro_profile_start_date', function($startdate, $order) use ($last_order) { return $last_order->ProfileStartDate;   }, 10, 2);
+    $last_order->ProfileStartDate = date( 'Y-m-d', $start_date ) . 'T0:0:0';
+    $last_order->RealProfileStartDate = $last_order->ProfileStartDate;
     
     // Okay. Subscribe.
     if ( ! $test ) {
