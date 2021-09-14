@@ -270,7 +270,7 @@ function pmprosc_uncancel_stripe_subscription( $user_id, $test = false, $debug =
         return false;
     }
     
-    if ( $debug ) {
+    if ( ! $test && $debug ) {
         echo "<strong>New subscription created: " . esc_html( $last_order->subscription_transaction_id ) . "</strong>\n";
     }
     
