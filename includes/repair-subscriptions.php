@@ -83,7 +83,7 @@ function pmprosc_uncancel_users() {
         }
         $content = ob_get_contents();
         ob_end_clean();
-        
+
         echo nl2br( $content );
     }
     
@@ -246,9 +246,8 @@ function pmprosc_uncancel_stripe_subscription( $user_id, $test = false, $debug =
     $last_order->PaymentAmount = $sub_item->plan->amount/100;
     $last_order->BillingPeriod = $sub_item->plan->interval;
     $last_order->BillingFrequency = $sub_item->plan->interval_count;
-    $last_order->TrialPeriodDays = 0;   // Overwritten by our filter below, but helps to stop a warning.
     $last_order->ProfileStartDate = date( 'Y-m-d', $start_date ) . 'T0:0:0';    
-        
+            
     // We need to use the filter because the subscribe method overwrites this.    
     add_filter('pmpro_profile_start_date', function($startdate, $order) use ($last_order) { return $last_order->ProfileStartDate;   }, 10, 2);
     
@@ -256,8 +255,8 @@ function pmprosc_uncancel_stripe_subscription( $user_id, $test = false, $debug =
     if ( ! $test ) {
         if ( $debug ) {
             echo "Creating the new subscription and subscribing.\n";
-        }
-        $gateway->subscribe( $last_order );
+        }        
+        $gateway->subscribe( $last_order );        
     } elseif ( $debug ) {
         echo "TESTING. This is where we would have created the new subscription and subscribed the customer.\n";
     }    
