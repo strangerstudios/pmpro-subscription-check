@@ -241,10 +241,19 @@ function pmprosc_uncancel_stripe_subscription( $user_id, $test = false, $debug =
     $sub_item = $old_sub->items->data[0];
     $start_date = $old_sub->current_period_end;
     
-    // If the start date is in the past, we're too late.
+    // (Optional) If the subscription is in the past, add some time.
+    $add_time = false;  // Change to true to enable.
+    if ( $add_time && $start_date < current_time( 'timestamp' ) ) {
+        $start_date = strtotime( date('Y-m-d', $start_date) . ' +2 weeks' );
+        if ( $debug ) {
+            echo "The period end from the old subscription (" . esc_html( date('Y-m-d', $old_sub->current_period_end ) ) . ") is in the past. Adding some time.\n";
+        }
+    }
+    
+    // If the start date is still in the past, we're too late.
     if ( $start_date < current_time( 'timestamp' ) ) {
         if ( $debug ) {
-            echo "The period end from the old subscription (" . esc_html( date('Y-m-d', $start_date ) ) . ") is in the past. It's too late to uncancel this.\n";
+            echo "The period end from the old subscription (" . esc_html( date('Y-m-d', $old_sub->current_period_end ) ) . ") is in the past. It's too late to uncancel this.\n";
         }
         return false;
     }
