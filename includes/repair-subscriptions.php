@@ -7,12 +7,87 @@ function pmprosc_testing() {
     if ( empty( $_REQUEST['test_uncancel_stripe_subscription'] ) || ! current_user_can( 'manage_options' ) ) {
         return;
     }
+    
+    pmprosc_uncancel_users();
         
-    pmprosc_uncancel_stripe_subscription(1, true, true);
+    //pmprosc_uncancel_stripe_subscription(1, true, true);
     exit;
 }
 add_action( 'init', 'pmprosc_testing' );
 */
+
+/**
+ * Find users flagged in user meta to uncancel.
+ *
+ * @param int       $limit      The number of user ids to get at a time.
+ * @return array    $user_ids   Array of user ids that have been flagged to uncancel.
+ */
+function pmprosc_get_user_ids_to_uncancel( $limit = 10 ) {
+    global $wpdb;
+    
+    // NOTE: Using user meta for now, but a user taxonomy would be better.
+    $meta_key = 'uncancel_stripe_subscription';    
+    $sqlQuery = "SELECT user_id FROM $wpdb->usermeta WHERE meta_key = '" . $meta_key . "' AND meta_value = '1' LIMIT " . intval( $limit );
+    $user_ids = $wpdb->get_col( $sqlQuery );
+    return $user_ids;
+}
+
+/**
+ * Uncancel users.
+ * Grab 10 users. Uncancel them. And show a link to uncancel the next few.
+ */
+function pmprosc_uncancel_users() {
+    if ( ! empty( $_REQUEST['limit'] ) ) {
+        $limit = intval( $_REQUEST['limit'] );
+    } else {
+        $limit = 10;
+    }
+    
+    if ( isset( $_REQUEST['test'] ) && $_REQUEST['test'] == 0 ) {
+        $test = false;
+    } else {
+        $test = true;
+    }
+    
+    if ( isset( $_REQUEST['debug'] ) && $_REQUEST['debug'] == 0 ) {
+        $debug = false;
+    } else {
+        $debug = true;
+    }
+    
+    $user_ids = pmprosc_get_user_ids_to_uncancel( $limit );
+    
+    if ( $debug ) {
+        echo "<h1>Uncanceling some users.</h1>";
+        echo "<p>Found " . count( $user_ids ) . " user(s).</p>";
+        echo "<hr />";
+    }
+    
+    foreach( $user_ids as $user_id ) {
+        ob_start();
+        $result = pmprosc_uncancel_stripe_subscription( $user_id, $test, $debug );
+        if ( $debug ) {
+            echo "<br />";
+        }
+        if ( ! $test ) {
+            if ( $result === false ) {
+                // this was an error              
+                update_user_meta( $user_id, 'uncancel_stripe_subscription', 2 );
+            } elseif ( $result === null ) {
+                // this was another skip
+                update_user_meta( $user_id, 'uncancel_stripe_subscription', 3 );
+            } else {
+                // it worked
+                update_user_meta( $user_id, 'uncancel_stripe_subscription', 4 );
+            }
+        }
+        $content = ob_get_contents();
+        ob_end_clean();
+        
+        echo nl2br( $content );
+    }
+    
+}
 
 /**
  * Try to figure out a user's Stripe Customer ID
@@ -169,9 +244,10 @@ function pmprosc_uncancel_stripe_subscription( $user_id, $test = false, $debug =
     $last_order->membership_name = $last_order->membership_level->name;
     $last_order->InitialPayment = 0;
     $last_order->PaymentAmount = $sub_item->plan->amount/100;
-    $last_order->BillingPeriod = 'notathing';//$sub_item->plan->interval;
+    $last_order->BillingPeriod = $sub_item->plan->interval;
     $last_order->BillingFrequency = $sub_item->plan->interval_count;
-    $last_order->ProfileStartDate = date( 'Y-m-d', $start_date ) . 'T0:0:0';
+    $last_order->TrialPeriodDays = 0;   // Overwritten by our filter below, but helps to stop a warning.
+    $last_order->ProfileStartDate = date( 'Y-m-d', $start_date ) . 'T0:0:0';    
         
     // We need to use the filter because the subscribe method overwrites this.    
     add_filter('pmpro_profile_start_date', function($startdate, $order) use ($last_order) { return $last_order->ProfileStartDate;   }, 10, 2);
@@ -192,6 +268,10 @@ function pmprosc_uncancel_stripe_subscription( $user_id, $test = false, $debug =
             echo $last_order->error . "\n";
         }
         return false;
+    }
+    
+    if ( $debug ) {
+        echo "<strong>New subscription created: " . esc_html( $last_order->subscription_transaction_id ) . "</strong>\n";
     }
     
     // Saving the order updates the status and subscription_transaction_id.    
